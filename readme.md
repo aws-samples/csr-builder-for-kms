@@ -35,7 +35,7 @@ A Python library for creating and signing X.509 certificate signing requests
 ## Usage
 
 ```bash
-git clone https://github.com/fortygigserver/kmscsrbuilder kmsCsrBuilder
+git clone git@ssh.gitlab.aws.dev:palmep/kms-csr_builder.git kmsCsrBuilder
 ```
 
 ```python
