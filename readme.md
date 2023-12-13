@@ -59,7 +59,7 @@ builder = KMSCSRBuilder(
 
 # Add subjectAltName domains
 builder.subject_alt_domains = ['xks.palmep.tech', 'www.palmep.tech']
-request = builder.build(kms_arn)
+request = builder.build_with_kms(kms_arn)
 
 with open('.\example-kms.csr', 'wb') as f:
     f.write(pem_armor_csr(request))
