@@ -44,7 +44,7 @@ sys.path.append('.\kmsCsrBuilder')
 
 from kmsCsrBuilder import KMSCSRBuilder, pem_armor_csr
 
-kms_arn = 'arn:aws:kms:eu-west-1:xxxxxxxxxxxx:key/1234abcd-12ab-34cd-56ef-1234567890ab'
+kms_arn = 'arn:aws:kms:eu-west-1:111122223333:key/a1b2c3d4-5678-90ab-cdef-EXAMPLE11111'
 
 builder = KMSCSRBuilder(
     {
