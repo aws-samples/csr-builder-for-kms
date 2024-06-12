@@ -165,22 +165,6 @@ class KMSCSRBuilder(object):
         An oscrypto.asymmetric.PublicKey object of the KMS Key public key.
         """
 
-        # is_oscrypto = isinstance(value, asymmetric.PublicKey)
-        # if not isinstance(value, keys.PublicKeyInfo) and not is_oscrypto:
-        #     raise TypeError(_pretty_message(
-        #         '''
-        #         subject_public_key must be an instance of
-        #         asn1crypto.keys.PublicKeyInfo or oscrypto.asymmetric.PublicKey,
-        #         not %s
-        #         ''',
-        #         _type_name(value)
-        #     ))
-
-        #Updated the function to provide kms_arn instead of subject_public_key.
-        #Retrieves Public Key from KMS if possible and ensures key usage is correct.
-        #Loads Public Key into oscrypto.asymmetric.puiblic_key object and uses the asn1 value.
-        #Also sets self._kms_arn if needed.
-
         try:
             PKresponse = kms.get_public_key(KeyId=value)
         except:
@@ -194,13 +178,9 @@ class KMSCSRBuilder(object):
         definedPubKey = asymmetric.load_public_key(rawPublicKey)
 
         self._subject_public_key = definedPubKey.asn1
-        # if is_oscrypto:
-        #     value = value.asn1
 
         self._kms_arn = value
 
-        # self._key_identifier = self._subject_public_key.sha1
-        # self._authority_key_identifier = None
 
     @_writer
     def hash_algo(self, value):
@@ -503,25 +483,7 @@ class KMSCSRBuilder(object):
             An asn1crypto.csr.CertificationRequest object of the request
         """
 
-        # is_oscrypto = isinstance(signing_private_key, asymmetric.PrivateKey)
-        # if not isinstance(signing_private_key, keys.PrivateKeyInfo) and not is_oscrypto:
-        #     raise TypeError(_pretty_message(
-        #         '''
-        #         signing_private_key must be an instance of
-        #         asn1crypto.keys.PrivateKeyInfo or
-        #         oscrypto.asymmetric.PrivateKey, not %s
-        #         ''',
-        #         _type_name(signing_private_key)
-        #     ))
-
-        # signature_algo = signing_private_key.algorithm
-        # if signature_algo == 'ec':
-        #     signature_algo = 'ecdsa'
-
-        # signature_algorithm_id = '%s_%s' % (self._hash_algo, signature_algo)
-        
-
-        #Replaced the above with some information from KMS Key. 
+   
         #Get the supported algorithms from the KMS Key Pair and set to specific literals (changable)
         #Need to construct signature_algorithm_id to match what CsrCertificationRequest expects. 
 
@@ -534,6 +496,7 @@ class KMSCSRBuilder(object):
             signature_algo = 'ecdsa'
         
         # hash_algo is defaulted to sha256
+        # kms_signature_algo is defaulted to RSASSA_PSS_SHA_256. PKCS1.5 must be explicitly defined 
         if "ECDSA" in kms_algos:
             signature_algorithm_id = '%s_%s' % (self._hash_algo, signature_algo)
             self.kms_signature_algo = '%s_%s' % ("ECDSA_SHA", self._hash_algo[-3:])
@@ -590,19 +553,9 @@ class KMSCSRBuilder(object):
             'attributes': attributes
         })
 
-        # if signing_private_key.algorithm == 'rsa':
-        #     sign_func = asymmetric.rsa_pkcs1v15_sign
-        # elif signing_private_key.algorithm == 'dsa':
-        #     sign_func = asymmetric.dsa_sign
-        # elif signing_private_key.algorithm == 'ec':
-        #     sign_func = asymmetric.ecdsa_sign
 
-        # if not is_oscrypto:
-        #     signing_private_key = asymmetric.load_private_key(signing_private_key)
-        #signature = sign_func(signing_private_key, certification_request_info.dump(), self._hash_algo)
-
-        #Get signature from KMS instead of using sign_func from the oscrypto.asymmetric.private_key object.
-        #Use the signature algo specified when describing the key earlier.
+        #Get signature from KMS 
+        #Use the kms_signature_algo when describing the key earlier.
 
         signature = kms.sign(KeyId=kms_arn,SigningAlgorithm=self._kms_signature_algo,Message=certification_request_info.dump())['Signature']
 
