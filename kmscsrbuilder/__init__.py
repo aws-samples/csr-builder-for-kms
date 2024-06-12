@@ -6,7 +6,7 @@ import re
 import sys
 import textwrap
 
-from asn1crypto import x509, keys, csr, pem
+from asn1crypto import x509, keys, csr, pem, algos
 from oscrypto import asymmetric
 
 from .version import __version__, __version_info__
@@ -76,6 +76,7 @@ class KMSCSRBuilder(object):
     _key_usage = None
     _extended_key_usage = None
     _other_extensions = None
+    _kms_signature_algo = None
 
     _special_extensions = set([
         'basic_constraints',
@@ -100,8 +101,9 @@ class KMSCSRBuilder(object):
         self.kms_arn = kms_arn
         self.ca = False
 
-        self._hash_algo = 'SHA_256'
+        self._hash_algo = 'sha256'
         self._other_extensions = {}
+        self._kms_signature_algo = 'RSASSA_PSS_SHA_256'
 
     @_writer
     def subject(self, value):
@@ -216,6 +218,36 @@ class KMSCSRBuilder(object):
             ))
 
         self._hash_algo = value
+
+
+    @_writer
+    def kms_signature_algo(self, value):
+        """
+        A string of the signing algorithm to use when signing the
+        request using KMS - valid values available https://docs.aws.amazon.com/kms/latest/APIReference/API_Sign.html
+        Does not accept SM2DSA
+        """
+        valid_algos = [
+            'RSASSA_PSS_SHA_256', 
+            'RSASSA_PSS_SHA_384', 
+            'RSASSA_PSS_SHA_512',
+            'RSASSA_PKCS1_V1_5_SHA_256',
+            'RSASSA_PKCS1_V1_5_SHA_384',
+            'RSASSA_PKCS1_V1_5_SHA_512',
+            'ECDSA_SHA_256',
+            'ECDSA_SHA_384',
+            'ECDSA_SHA_512'
+            ]
+
+        if value not in valid_algos:
+            raise ValueError(_pretty_message(
+                '''
+                kms_signature_algo must be supported by AWS KMS, not %s
+                ''',
+                repr(value)
+            ))
+
+        self._kms_signature_algo = value
 
     @property
     def ca(self):
@@ -490,21 +522,42 @@ class KMSCSRBuilder(object):
         
 
         #Replaced the above with some information from KMS Key. 
-        #Get the supported algorithms from the KMS Key Pair and set to specific literals (chanagable)
+        #Get the supported algorithms from the KMS Key Pair and set to specific literals (changable)
         #Need to construct signature_algorithm_id to match what CsrCertificationRequest expects. 
-        #Always using SHA256 so need to match rsa or ecdsa
 
         kms_algos = kms.describe_key(KeyId=kms_arn)['KeyMetadata']['SigningAlgorithms']
 
+        # Select the asymmetric key type based on recommended signature algorithm id
         if "RSASSA_PSS_SHA_256" in kms_algos:
-            signature_algo = 'RSASSA_PSS_SHA_256'
+            signature_algo = 'rsa'
         elif "ECDSA_SHA_256" in kms_algos:
-            signature_algo = 'ECDSA_SHA_256'
-
-        if "ECDSA" in signature_algo:
-            signature_algorithm_id = 'sha256_ecdsa'
-        elif "RSA" in signature_algo:
-            signature_algorithm_id = 'sha256_rsa'
+            signature_algo = 'ecdsa'
+        
+        # hash_algo is defaulted to sha256
+        if "ECDSA" in kms_algos:
+            signature_algorithm_id = '%s_%s' % (self._hash_algo, signature_algo)
+            self.kms_signature_algo = '%s_%s' % ("ECDSA_SHA", self._hash_algo[-3:])
+        elif "RSA" in kms_algos:
+            if "PSS" in self._kms_signature_algo:
+                signature_algorithm_id = algos.SignedDigestAlgorithm({
+                    'algorithm': 'rsassa_pss',
+                    'parameters': algos.RSASSAPSSParams({
+                        'hash_algorithm': algos.DigestAlgorithm({
+                            'algorithm': self._hash_algo
+                        }),
+                        'mask_gen_algorithm': algos.MaskGenAlgorithm({
+                            'algorithm': 'mgf1',
+                            'parameters': algos.DigestAlgorithm({
+                                'algorithm': self._hash_algo
+                            }),
+                        }),
+                        'salt_length': int(self._hash_algo[-3:])//8
+                    })   
+                })
+                self.kms_signature_algo = '%s_%s' % ("RSASSA_PSS_SHA", self._hash_algo[-3:])
+            else:   
+                signature_algorithm_id = '%s_%s' % (self._hash_algo, signature_algo)
+                self.kms_signature_algo = '%s_%s' % ("RSASSA_PKCS1_V1_5_SHA", self._hash_algo[-3:])
 
 
         def _make_extension(name, value):
@@ -551,7 +604,7 @@ class KMSCSRBuilder(object):
         #Get signature from KMS instead of using sign_func from the oscrypto.asymmetric.private_key object.
         #Use the signature algo specified when describing the key earlier.
 
-        signature = kms.sign(KeyId=kms_arn,SigningAlgorithm=signature_algo,Message=certification_request_info.dump())['Signature']
+        signature = kms.sign(KeyId=kms_arn,SigningAlgorithm=self._kms_signature_algo,Message=certification_request_info.dump())['Signature']
 
         return csr.CertificationRequest({
             'certification_request_info': certification_request_info,

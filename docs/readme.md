@@ -16,9 +16,10 @@ The documentation consists of the following topics:
 
 ## Basic Usage
 
-A simple CSR can be created by generating a public/private
-key pair using *oscrypto* and then passing a dictionary of name information to
-the `KMSCSRBuilder()` constructor:
+To use this software, you need access Sign, DescribeKey and GetPublicKey permissions on a KMS asymmetric key with SIGN_VERIFY usage. If you don't have such a key already, you can create one through the AWS console or AWS CLI or any available AWS SDK.
+
+A simple CSR can be created by  passing a dictionary of name information to
+the `KMSCSRBuilder()` constructor along with a KMS Key arn:
 
 ```python
 import sys
@@ -33,7 +34,7 @@ builder = KMSCSRBuilder(
         'country_name': 'IE',
         'state_or_province_name': 'Meath',
         'locality_name': 'East Meath',
-        'organization_name': 'Palmep Tech',
+        'organization_name': 'Amazon Web Services',
         'common_name': 'Patrick',
     },
     kms_arn

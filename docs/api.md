@@ -82,7 +82,28 @@
 > ##### `.hash_algo` attribute
 >
 > > A unicode string of the hash algorithm to use when signing the
-> > request - "sha1" (not recommended), "sha256" or "sha512"
+> > request - "sha1" (not recommended), "sha256" (default) or "sha512"
+>
+> ##### `.kms_signature_algo` attribute
+>
+> > A string of the signing algorithm to use when signing the
+> > request using KMS - valid values available https://docs.aws.amazon.com/kms/latest/APIReference/API_Sign.html
+> > Does not accept SM2DSA
+>
+> > ```python
+> > builder = KMSCSRBuilder(
+> >    {
+> >        'country_name': 'IE',
+> >        'state_or_province_name': 'Meath',
+> >        'locality_name': 'East Meath',
+> >        'organization_name': 'Amazon Web Services',
+> >        'common_name': 'Patrick',
+> >    },
+> >    kms_arn
+> > )
+> > builder.kms_signature_algo = 'ECDSA_SHA_256'
+> > request - builder.build_with_kms(kms_arn)
+> > ```
 >
 > ##### `.ca` attribute
 >
@@ -104,12 +125,47 @@
 >
 > > A set of unicode strings representing the allowed usage of the key.
 > > Empty set indicates no key usage extension request.
+> > Must be a value of the set ["digital_signature", "non_repudiation", "key_encipherment", 
+> > "data_encipherment", "data_encipherment", "key_cert_sign", 
+> > "key_cert_sign", "key_cert_sign", "decipher_only"]
+> > See KeyUsage class in [asn1crypto.x509](https://github.com/wbond/asn1crypto/blob/master/asn1crypto/x509.py)
+>
+> > ```python
+> > builder = KMSCSRBuilder(
+> >    {
+> >        'country_name': 'IE',
+> >        ...
+> >        'organization_name': 'Amazon Web Services',
+> >        'common_name': 'Patrick',
+> >    },
+> >    kms_arn
+> > )
+> > builder.key_usage = set(['digital_signature'])
+> > request = builder.build_with_kms(kms_arn)
+> > ```
+>
 >
 > ##### `.extended_key_usage` attribute
 >
 > > A set of unicode strings representing the allowed usage of the key from
 > > the extended key usage extension. Empty set indicates no extended key
 > > usage extension request.
+> > Valid strings can be found in [asn1crypto.x509.KeyPurposeId](https://github.com/wbond/asn1crypto/blob/master/asn1crypto/x509.py#L1682)
+>
+> > ```python
+> > builder = KMSCSRBuilder(
+> >    {
+> >        'country_name': 'IE',
+> >        ...
+> >        'organization_name': 'Amazon Web Services',
+> >        'common_name': 'Patrick',
+> >    },
+> >    kms_arn
+> > )
+> > builder.extended_key_usage = set(['code_signing'])
+> > request = builder.build_with_kms(kms_arn)
+> > ```
+>
 >
 > ##### `.set_extension()` method
 >
