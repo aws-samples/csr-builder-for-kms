@@ -25,7 +25,7 @@ the `KMSCSRBuilder()` constructor along with a KMS Key arn:
 import sys
 sys.path.append('.\kmsCsrBuilder')
 
-from kmsCsrBuilder import KMSCSRBuilder, pem_armor_csr
+from kmscsrbuilder import KMSCSRBuilder, pem_armor_csr
 
 kms_arn = 'arn:aws:kms:eu-west-1:xxxxxxxxxxxx:key/1234abcd-12ab-34cd-56ef-1234567890ab'
 

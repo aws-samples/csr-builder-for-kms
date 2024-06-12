@@ -488,7 +488,6 @@ class KMSCSRBuilder(object):
         #Need to construct signature_algorithm_id to match what CsrCertificationRequest expects. 
 
         kms_algos = kms.describe_key(KeyId=kms_arn)['KeyMetadata']['SigningAlgorithms']
-
         # Select the asymmetric key type based on recommended signature algorithm id
         if "RSASSA_PSS_SHA_256" in kms_algos:
             signature_algo = 'rsa'
@@ -497,10 +496,12 @@ class KMSCSRBuilder(object):
         
         # hash_algo is defaulted to sha256
         # kms_signature_algo is defaulted to RSASSA_PSS_SHA_256. PKCS1.5 must be explicitly defined 
-        if "ECDSA" in kms_algos:
-            signature_algorithm_id = '%s_%s' % (self._hash_algo, signature_algo)
+        if "ecdsa" in signature_algo:
+            signature_algorithm_id = {
+                'algorithm': '%s_%s' % (self._hash_algo, signature_algo)
+            }
             self.kms_signature_algo = '%s_%s' % ("ECDSA_SHA", self._hash_algo[-3:])
-        elif "RSA" in kms_algos:
+        elif "rsa" in signature_algo:
             if "PSS" in self._kms_signature_algo:
                 signature_algorithm_id = algos.SignedDigestAlgorithm({
                     'algorithm': 'rsassa_pss',
@@ -519,7 +520,9 @@ class KMSCSRBuilder(object):
                 })
                 self.kms_signature_algo = '%s_%s' % ("RSASSA_PSS_SHA", self._hash_algo[-3:])
             else:   
-                signature_algorithm_id = '%s_%s' % (self._hash_algo, signature_algo)
+                signature_algorithm_id = {
+                    'algorithm': '%s_%s' % (self._hash_algo, signature_algo)
+                }
                 self.kms_signature_algo = '%s_%s' % ("RSASSA_PKCS1_V1_5_SHA", self._hash_algo[-3:])
 
 
@@ -558,12 +561,9 @@ class KMSCSRBuilder(object):
         #Use the kms_signature_algo when describing the key earlier.
 
         signature = kms.sign(KeyId=kms_arn,SigningAlgorithm=self._kms_signature_algo,Message=certification_request_info.dump())['Signature']
-
         return csr.CertificationRequest({
             'certification_request_info': certification_request_info,
-            'signature_algorithm': {
-                'algorithm': signature_algorithm_id,
-            },
+            'signature_algorithm': signature_algorithm_id,
             'signature': signature
         })
 

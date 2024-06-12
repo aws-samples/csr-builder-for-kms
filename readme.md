@@ -43,7 +43,7 @@ pip3 install asn1crypto oscrypto
 import sys
 sys.path.append('.\kmsCsrBuilder')
 
-from kmsCsrBuilder import KMSCSRBuilder, pem_armor_csr
+from kmscsrbuilder import KMSCSRBuilder, pem_armor_csr
 
 kms_arn = 'arn:aws:kms:eu-west-1:111122223333:key/a1b2c3d4-5678-90ab-cdef-EXAMPLE11111'
 
