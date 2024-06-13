@@ -226,7 +226,7 @@ class KMSCSRBuilder(object):
                 ''',
                 repr(value)
             ))
-
+        self._hash_algo = 'sha' + value[-3:]
         self._kms_signature_algo = value
 
     @property
