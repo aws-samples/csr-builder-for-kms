@@ -35,7 +35,7 @@ A Python library for creating and signing X.509 certificate signing requests
 ## Usage
 
 ```bash
-git clone git@ssh.gitlab.aws.dev:palmep/kms-csr_builder.git kmsCsrBuilder
+git clone git@github.com:aws-samples/csr-builder-for-kms.git kmsCsrBuilder
 pip3 install asn1crypto oscrypto
 ```
 
@@ -51,7 +51,7 @@ builder = KMSCSRBuilder(
     {
         'country_name': 'IE',
         'state_or_province_name': 'Meath',
-        'locality_name': 'East Meath',
+        'locality_name': 'Meath',
         'organization_name': 'Palmep Tech',
         'common_name': 'Patrick',
     },
