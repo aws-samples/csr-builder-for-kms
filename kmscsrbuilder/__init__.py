@@ -30,6 +30,19 @@ __all__ = [
 
 kms = boto3.client('kms')
 
+# KMS key specs whose public keys oscrypto cannot load and whose CSR signature
+# algorithm identifier has no parameters. Maps the key spec to the X.509
+# signature algorithm OID and the KMS signing algorithm (used with MessageType
+# RAW, i.e. KMS signs the CertificationRequestInfo directly).
+#  - ML-DSA (FIPS 204): OIDs per RFC 9881
+#  - Ed25519 (PureEdDSA): OID per RFC 8410
+_OPAQUE_KEY_SPECS = {
+    'ML_DSA_44': ('2.16.840.1.101.3.4.3.17', 'ML_DSA_SHAKE_256'),
+    'ML_DSA_65': ('2.16.840.1.101.3.4.3.18', 'ML_DSA_SHAKE_256'),
+    'ML_DSA_87': ('2.16.840.1.101.3.4.3.19', 'ML_DSA_SHAKE_256'),
+    'ECC_NIST_EDWARDS25519': ('1.3.101.112', 'ED25519_SHA_512'),
+}
+
 def _writer(func):
     """
     Decorator for a custom writer, but a default reader
@@ -175,9 +188,13 @@ class KMSCSRBuilder(object):
         
         rawPublicKey = PKresponse['PublicKey']
 
-        definedPubKey = asymmetric.load_public_key(rawPublicKey)
-
-        self._subject_public_key = definedPubKey.asn1
+        if PKresponse.get('KeySpec') in _OPAQUE_KEY_SPECS:
+            # oscrypto does not know these keys; the DER from GetPublicKey is
+            # already a SubjectPublicKeyInfo, so load it as-is with asn1crypto
+            self._subject_public_key = keys.PublicKeyInfo.load(rawPublicKey)
+        else:
+            definedPubKey = asymmetric.load_public_key(rawPublicKey)
+            self._subject_public_key = definedPubKey.asn1
 
         self._kms_arn = value
 
@@ -217,7 +234,9 @@ class KMSCSRBuilder(object):
             'RSASSA_PKCS1_V1_5_SHA_512',
             'ECDSA_SHA_256',
             'ECDSA_SHA_384',
-            'ECDSA_SHA_512'
+            'ECDSA_SHA_512',
+            'ML_DSA_SHAKE_256',
+            'ED25519_SHA_512'
             ]
 
         if value not in valid_algos:
@@ -227,7 +246,8 @@ class KMSCSRBuilder(object):
                 ''',
                 repr(value)
             ))
-        self._hash_algo = 'sha' + value[-3:]
+        if value not in ('ML_DSA_SHAKE_256', 'ED25519_SHA_512'):
+            self._hash_algo = 'sha' + value[-3:]
         self._kms_signature_algo = value
 
     @property
@@ -498,7 +518,9 @@ class KMSCSRBuilder(object):
             'ECC_NIST_P384': 'sha384',
             'ECC_NIST_P521': 'sha512',
         }
-        if key_spec in ('RSA_2048', 'RSA_3072', 'RSA_4096'):
+        if key_spec in _OPAQUE_KEY_SPECS:
+            signature_algo = 'opaque'
+        elif key_spec in ('RSA_2048', 'RSA_3072', 'RSA_4096'):
             signature_algo = 'rsa'
         elif key_spec in ecdsa_hash_for_spec:
             signature_algo = 'ecdsa'
@@ -506,7 +528,8 @@ class KMSCSRBuilder(object):
             raise ValueError(_pretty_message(
                 '''
                 KMS key %s has key spec %s, which is not supported by
-                kmscsrbuilder (RSA_2048/3072/4096, ECC_NIST_P256/P384/P521)
+                kmscsrbuilder (RSA_2048/3072/4096, ECC_NIST_P256/P384/P521,
+                ML_DSA_44/65/87, ECC_NIST_EDWARDS25519)
                 ''',
                 kms_arn,
                 repr(key_spec)
@@ -514,7 +537,15 @@ class KMSCSRBuilder(object):
 
         # hash_algo is defaulted to sha256
         # kms_signature_algo is defaulted to RSASSA_PSS_SHA_256. PKCS1.5 must be explicitly defined 
-        if "ecdsa" in signature_algo:
+        if "opaque" in signature_algo:
+            # ML-DSA / Ed25519: algorithm identifier with absent parameters,
+            # and a fixed KMS signing algorithm for the key spec
+            oid, kms_algo = _OPAQUE_KEY_SPECS[key_spec]
+            signature_algorithm_id = algos.SignedDigestAlgorithm({
+                'algorithm': oid
+            })
+            self.kms_signature_algo = kms_algo
+        elif "ecdsa" in signature_algo:
             # The hash is determined by the curve; hash_algo is ignored for ECDSA
             self._hash_algo = ecdsa_hash_for_spec[key_spec]
             signature_algorithm_id = {
