@@ -82,7 +82,9 @@
 > ##### `.hash_algo` attribute
 >
 > > A unicode string of the hash algorithm to use when signing the
-> > request - "sha1" (not recommended), "sha256" (default) or "sha512"
+> > request with an RSA key - "sha256" (default), "sha384" or "sha512".
+> > For ECDSA keys the hash is determined by the curve (P256: SHA-256,
+> > P384: SHA-384, P521: SHA-512) and this attribute is ignored.
 >
 > ##### `.kms_signature_algo` attribute
 >
