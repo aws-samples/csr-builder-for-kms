@@ -186,13 +186,14 @@ class KMSCSRBuilder(object):
     def hash_algo(self, value):
         """
         A unicode string of the hash algorithm to use when signing the
-        request - "sha1" (not recommended), "sha256" or "sha512"
+        request - "sha256", "sha384" or "sha512". AWS KMS does not offer
+        SHA-1 signing algorithms, so "sha1" is not accepted.
         """
 
-        if value not in set(['sha1', 'sha256', 'sha512']):
+        if value not in set(['sha256', 'sha384', 'sha512']):
             raise ValueError(_pretty_message(
                 '''
-                hash_algo must be one of "sha1", "sha256", "sha512", not %s
+                hash_algo must be one of "sha256", "sha384", "sha512", not %s
                 ''',
                 repr(value)
             ))
@@ -487,16 +488,35 @@ class KMSCSRBuilder(object):
         #Get the supported algorithms from the KMS Key Pair and set to specific literals (changable)
         #Need to construct signature_algorithm_id to match what CsrCertificationRequest expects. 
 
-        kms_algos = kms.describe_key(KeyId=kms_arn)['KeyMetadata']['SigningAlgorithms']
-        # Select the asymmetric key type based on recommended signature algorithm id
-        if "RSASSA_PSS_SHA_256" in kms_algos:
+        key_metadata = kms.describe_key(KeyId=kms_arn)['KeyMetadata']
+        key_spec = key_metadata.get('KeySpec', key_metadata.get('CustomerMasterKeySpec'))
+        # Select the asymmetric key type from the key spec. KMS supports exactly
+        # one ECDSA algorithm per curve (P256: SHA-256, P384: SHA-384,
+        # P521: SHA-512), so matching on "ECDSA_SHA_256" only worked for P256.
+        ecdsa_hash_for_spec = {
+            'ECC_NIST_P256': 'sha256',
+            'ECC_NIST_P384': 'sha384',
+            'ECC_NIST_P521': 'sha512',
+        }
+        if key_spec in ('RSA_2048', 'RSA_3072', 'RSA_4096'):
             signature_algo = 'rsa'
-        elif "ECDSA_SHA_256" in kms_algos:
+        elif key_spec in ecdsa_hash_for_spec:
             signature_algo = 'ecdsa'
-        
+        else:
+            raise ValueError(_pretty_message(
+                '''
+                KMS key %s has key spec %s, which is not supported by
+                kmscsrbuilder (RSA_2048/3072/4096, ECC_NIST_P256/P384/P521)
+                ''',
+                kms_arn,
+                repr(key_spec)
+            ))
+
         # hash_algo is defaulted to sha256
         # kms_signature_algo is defaulted to RSASSA_PSS_SHA_256. PKCS1.5 must be explicitly defined 
         if "ecdsa" in signature_algo:
+            # The hash is determined by the curve; hash_algo is ignored for ECDSA
+            self._hash_algo = ecdsa_hash_for_spec[key_spec]
             signature_algorithm_id = {
                 'algorithm': '%s_%s' % (self._hash_algo, signature_algo)
             }
