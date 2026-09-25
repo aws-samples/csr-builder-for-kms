@@ -66,6 +66,16 @@ with open('.\example-kms.csr', 'wb') as f:
     f.write(pem_armor_csr(request))
 ```
 
+ML-DSA (post-quantum) KMS keys (`ML_DSA_44`, `ML_DSA_65`, `ML_DSA_87`) and
+Ed25519 keys (`ECC_NIST_EDWARDS25519`) are supported as well. The key spec is
+detected from KMS and the matching signing algorithm (`ML_DSA_SHAKE_256` or
+`ED25519_SHA_512`) is used; no additional configuration is needed. The CSR
+signature can be verified with OpenSSL (3.5 or later for ML-DSA):
+
+```bash
+openssl req -in example-kms.csr -noout -verify
+```
+
 ## License
 
 *kmscsrbuilder* is licensed under the terms of the MIT license. See the
